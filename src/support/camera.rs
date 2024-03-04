@@ -9,8 +9,11 @@ pub struct CameraState {
     moving_right: bool,
     moving_forward: bool,
     moving_backward: bool,
+    looking_right: bool,
+    looking_left: bool,
 }
 
+#[allow(dead_code)]
 impl CameraState {
     pub fn new() -> CameraState {
         CameraState {
@@ -23,6 +26,8 @@ impl CameraState {
             moving_right: false,
             moving_forward: false,
             moving_backward: false,
+            looking_right: false,
+            looking_left: false,
         }
     }
 
@@ -33,7 +38,14 @@ impl CameraState {
     pub fn set_direction(&mut self, dir: (f32, f32, f32)) {
         self.direction = dir;
     }
-
+    
+    pub fn get_pitch_yaw(&self) -> (f32, f32) {  // See https://stackoverflow.com/a/33790309/2016800
+        (
+            self.direction.1.asin(),
+            self.direction.2.atan2(self.direction.0)
+        )
+    }
+    
     pub fn get_perspective(&self) -> [[f32; 4]; 4] {
         let fov: f32 = 3.141592 / 2.0;
         let zfar = 1024.0;
@@ -146,17 +158,26 @@ impl CameraState {
             self.position.1 -= f.1 * 0.01;
             self.position.2 -= f.2 * 0.01;
         }
+
+        if self.looking_right {
+            let dir = self.direction;
+            self.set_direction((dir.0 + 1.0, dir.1, dir.2));
+        }
+
+        if self.looking_left {
+            let dir = self.direction;
+            self.set_direction((dir.0 - 1.0, dir.1, dir.2));
+        }
     }
 
     pub fn process_input(&mut self, event: &winit::event::WindowEvent) {
         use winit::keyboard::{PhysicalKey, KeyCode};
-        let winit::event::WindowEvent::KeyboardInput { event, .. } = event else {
-            return
-        };
         let pressed = event.state == winit::event::ElementState::Pressed;
         match &event.physical_key {
             PhysicalKey::Code(KeyCode::ArrowUp) => self.moving_up = pressed,
             PhysicalKey::Code(KeyCode::ArrowDown) => self.moving_down = pressed,
+            PhysicalKey::Code(KeyCode::ArrowRight) => self.looking_right = pressed,
+            PhysicalKey::Code(KeyCode::ArrowLeft) => self.looking_left = pressed,
             PhysicalKey::Code(KeyCode::KeyA) => self.moving_left = pressed,
             PhysicalKey::Code(KeyCode::KeyD) => self.moving_right = pressed,
             PhysicalKey::Code(KeyCode::KeyW) => self.moving_forward = pressed,

@@ -4,7 +4,7 @@ use glutin::display::GetGlDisplay;
 use glutin::context::NotCurrentGlContext;
 use glium::Display;
 use glutin::surface::WindowSurface;
-use raw_window_handle::HasRawWindowHandle;
+use rwh_05::HasRawWindowHandle;
 
 pub mod camera;
 
@@ -50,6 +50,7 @@ pub fn load_wavefront(display: &Display<WindowSurface>, data: &[u8]) -> glium::v
     glium::vertex::VertexBuffer::new(display, &vertex_data).unwrap().into()
 }
 
+#[allow(dead_code)]
 pub fn view_matrix(position: &[f32; 3], direction: &[f32; 3], up: &[f32; 3]) -> [[f32; 4]; 4] {
     let f = {
         let f = direction;
@@ -105,25 +106,27 @@ impl<T: ApplicationContext + 'static> State<T> {
     ) -> Self {
         let window_builder = winit::window::WindowBuilder::new().with_title(T::WINDOW_TITLE).with_visible(visible);
         let config_template_builder = glutin::config::ConfigTemplateBuilder::new();
-        let display_builder = glutin_winit::DisplayBuilder::new().with_window_builder(Some(window_builder));
+        let display_builder = glutin_winit::DisplayBuilder::new().with_window_builder(Some(window_builder.clone()));
 
         // First we create a window
         let (window, gl_config) = display_builder
+            .with_preference(glutin_winit::ApiPreference::FallbackEgl)
             .build(event_loop, config_template_builder, |mut configs| {
                 // Just use the first configuration since we don't have any special preferences here
-                configs.next().unwrap()
+                configs.next().expect("config fail")
             })
-            .unwrap();
+            .expect("create config");
 
         // Then the configuration which decides which OpenGL version we'll end up using, here we just use the default which is currently 3.3 core
         // When this fails we'll try and create an ES context, this is mainly used on mobile devices or various ARM SBC's
         // If you depend on features available in modern OpenGL Versions you need to request a specific, modern, version. Otherwise things will very likely fail.
         
-        let raw_window_handle = window.as_ref().map(|w| w.raw_window_handle()).expect("Test");
-        let context_attributes = glutin::context::ContextAttributesBuilder::new().build(Some(raw_window_handle));
+        let raw_window_handle = window.as_ref().map(|w| w.raw_window_handle());
+        
+        let context_attributes = glutin::context::ContextAttributesBuilder::new().build(raw_window_handle);
         let fallback_context_attributes = glutin::context::ContextAttributesBuilder::new()
             .with_context_api(glutin::context::ContextApi::Gles(None))
-            .build(raw_window_handle.unwrap());
+            .build(raw_window_handle);
 
         let not_current_gl_context = Some(unsafe {
             gl_config.display().create_context(&gl_config, &context_attributes).unwrap_or_else(|_| {
@@ -133,10 +136,12 @@ impl<T: ApplicationContext + 'static> State<T> {
             })
         });
 
+        let window = window.expect("Window fail");
+
         // Determine our framebuffer size based on the window size, or default to 800x600 if it's invisible
         let (width, height): (u32, u32) = if visible { window.inner_size().into() } else { (800, 600) };
         let attrs = glutin::surface::SurfaceAttributesBuilder::<WindowSurface>::new().build(
-            window_handle,
+            raw_window_handle.expect("raw window handle"),
             NonZeroU32::new(width).unwrap(),
             NonZeroU32::new(height).unwrap(),
         );
@@ -218,6 +223,7 @@ impl<T: ApplicationContext + 'static> State<T> {
     }
 
     /// Create a context and draw a single frame
+    #[allow(dead_code)]
     pub fn run_once(visible: bool) {
         let event_loop = winit::event_loop::EventLoopBuilder::new()
             .build()
